@@ -17,7 +17,7 @@ jobs:
           channel: stable
           cache: true
       - name: Generate Android platform files
-        run: flutter create . --platforms=android --org com.omninfc --project-name omninfc_pro
+        run: flutter create . --platforms=android --org com.omninfc --project-name omninfc_pro && rm -f test/widget_test.dart
       - name: Patch manifest and MainActivity
         run: |
           sed -i 's|<application|<uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>\n    <application|' android/app/src/main/AndroidManifest.xml
