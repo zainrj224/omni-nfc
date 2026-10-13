@@ -1,0 +1,31 @@
+name: omninfc_pro
+description: OmniNFC Pro - NFC reader and tag modifier with role-based access and audit trail.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  nfc_manager: ^3.5.0
+  flutter_secure_storage: ^9.2.2
+  local_auth: ^2.3.0
+  jwt_decoder: ^2.0.1
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  http: ^1.2.2
+  crypto: ^3.0.5
+  uuid: ^4.5.1
+  intl: ^0.19.0
+  connectivity_plus: ^6.0.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
