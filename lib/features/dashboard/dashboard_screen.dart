@@ -103,6 +103,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           if (can(r, Permission.readTag))
             _Tile(Icons.nfc, 'Scan tag', 'Read and inspect NDEF records', () => _push(const ReaderScreen())),
           if (can(r, Permission.writeTag))
+            _Tile(Icons.flash_on, 'Quick edit tag', 'Tap a tag, change it, save it back',
+                () => _push(const WriterScreen(autoLoad: true))),
+          if (can(r, Permission.writeTag))
             _Tile(Icons.edit, 'Write tag', 'Build a payload and program a tag', () => _push(const WriterScreen())),
           if (can(r, Permission.viewAuditLog))
             _Tile(Icons.history, 'Audit log', 'Every write, lock and format', () => _push(const AuditScreen())),

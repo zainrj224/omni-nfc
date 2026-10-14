@@ -10,8 +10,9 @@ import '../../core/permissions.dart';
 import '../../providers.dart';
 
 class WriterScreen extends ConsumerStatefulWidget {
-  const WriterScreen({super.key, this.prefill});
+  const WriterScreen({super.key, this.prefill, this.autoLoad = false});
   final ParsedRecord? prefill;
+  final bool autoLoad;
   @override
   ConsumerState<WriterScreen> createState() => _WriterScreenState();
 }
@@ -23,6 +24,8 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
   bool _sign = false;
   bool _lock = false;
   bool _busy = false;
+  bool _loading = false;
+  String? _loadedUid;
   String? _status;
   bool _ok = false;
 
@@ -30,20 +33,71 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
   void initState() {
     super.initState();
     final p = widget.prefill;
-    if (p != null) {
-      switch (p.kind) {
-        case RecordKind.uri:
-          _type = PayloadType.url;
-          _value.text = p.summary;
-        case RecordKind.text:
-          _type = PayloadType.text;
-          _value.text = p.summary;
-        case RecordKind.json:
-          _type = PayloadType.json;
-          _value.text = p.summary;
-        default:
-      }
+    if (p != null) _applyRecord(p);
+    if (widget.autoLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadFromTag());
     }
+  }
+
+  void _applyRecord(ParsedRecord p) {
+    switch (p.kind) {
+      case RecordKind.uri:
+        _type = PayloadType.url;
+        _value.text = p.summary;
+      case RecordKind.text:
+        _type = PayloadType.text;
+        _value.text = p.summary;
+      case RecordKind.json:
+        _type = PayloadType.json;
+        _value.text = p.summary;
+      default:
+    }
+  }
+
+  /// Tap a tag and load its first record into the form for quick editing.
+  Future<void> _loadFromTag() async {
+    final nfc = ref.read(nfcServiceProvider);
+    if (!await nfc.isAvailable()) {
+      if (mounted) setState(() => _status = 'NFC is unavailable or turned off.');
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _ok = false;
+      _status = 'Hold the tag against the back of the phone to load it...';
+    });
+    nfc.startRead(
+      signer: null,
+      onTag: (s) async {
+        await nfc.cancel();
+        HapticFeedback.heavyImpact();
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _loadedUid = s.uid;
+          _ok = true;
+          final rec = s.parsed.where((p) => p.kind != RecordKind.signature).toList();
+          if (rec.isEmpty) {
+            _status = 'Tag ${s.uid} is empty. Enter new content and tap Prepare write.';
+          } else {
+            _applyRecord(rec.first);
+            _status = 'Loaded from ${s.uid}'
+                '${s.writable ? '' : ' (read-only, cannot be edited)'}. '
+                'Edit it and tap Prepare write.';
+          }
+        });
+      },
+      onError: (m) {
+        if (mounted) {
+          setState(() {
+            _loading = false;
+            _ok = false;
+            _status = m;
+          });
+        }
+      },
+    );
   }
 
   @override
@@ -73,6 +127,10 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
       false;
 
   Future<void> _run(Future<WriteReport> Function() op, AppUser user, String Function(WriteReport) action) async {
+    if (_loading) {
+      await ref.read(nfcServiceProvider).cancel();
+      _loading = false;
+    }
     setState(() {
       _busy = true;
       _ok = false;
@@ -89,7 +147,8 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
       HapticFeedback.heavyImpact();
       if (mounted) setState(() {
         _ok = true;
-        _status = 'Done and verified. UID ${r.uid}${r.locked ? ' (locked)' : ''}';
+        _status = 'Done and verified. UID ${r.uid}${r.locked ? ' (locked)' : ''}'
+            '${_loadedUid != null && _loadedUid != r.uid ? ' (a different tag than the one loaded)' : ''}';
       });
     } on NfcFailure catch (e) {
       if (mounted) setState(() => _status = e.message);
@@ -156,6 +215,12 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
             ],
             selected: {_type},
             onSelectionChanged: _busy ? null : (s) => setState(() => _type = s.first),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: (_busy || _loading) ? null : _loadFromTag,
+            icon: const Icon(Icons.download),
+            label: Text(_loadedUid == null ? 'Read tag into form' : 'Read another tag'),
           ),
           const SizedBox(height: 16),
           TextField(
@@ -231,14 +296,19 @@ class _WriterScreenState extends ConsumerState<WriterScreen> {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Row(children: [
-                  if (_busy) const Padding(padding: EdgeInsets.only(right: 12), child: CircularProgressIndicator()),
+                  if (_busy || _loading) const Padding(padding: EdgeInsets.only(right: 12), child: CircularProgressIndicator()),
                   Expanded(child: Text(_status!, style: const TextStyle(fontSize: 16))),
                 ]),
               ),
             ),
           const SizedBox(height: 8),
-          if (_busy)
-            OutlinedButton(onPressed: () => ref.read(nfcServiceProvider).cancel(), child: const Text('Cancel'))
+          if (_busy || _loading)
+            OutlinedButton(
+                onPressed: () async {
+                  await ref.read(nfcServiceProvider).cancel();
+                  if (mounted) setState(() => _loading = false);
+                },
+                child: const Text('Cancel'))
           else ...[
             FilledButton.icon(
               onPressed: () => _prepareWrite(user),
