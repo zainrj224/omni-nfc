@@ -1,4 +1,4 @@
-name: Build OmniNFC Pro APK
+﻿name: Build OmniNFC Pro APK
 on:
   push:
   workflow_dispatch:
@@ -17,11 +17,25 @@ jobs:
           channel: stable
           cache: true
       - name: Generate Android platform files
-        run: flutter create . --platforms=android --org com.omninfc --project-name omninfc_pro && rm -f test/widget_test.dart
+        run: |
+          flutter create . --platforms=android --org com.omninfc --project-name omninfc_pro
+          rm -f test/widget_test.dart
       - name: Patch manifest and MainActivity
         run: |
           sed -i 's|<application|<uses-permission android:name="android.permission.NFC"/>\n    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>\n    <application|' android/app/src/main/AndroidManifest.xml
           find android/app/src/main -name 'MainActivity.*' -exec sed -i 's/FlutterActivity/FlutterFragmentActivity/g' {} +
+      - name: Force compileSdk 36 for all plugins
+        run: |
+          mkdir -p ~/.gradle
+          cat > ~/.gradle/init.gradle <<'EOF'
+          allprojects {
+            afterEvaluate { p ->
+              if (p.hasProperty('android')) {
+                p.android.compileSdkVersion 36
+              }
+            }
+          }
+          EOF
       - run: flutter pub get
       - run: flutter analyze
         continue-on-error: true
